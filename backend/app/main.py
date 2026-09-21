@@ -17,6 +17,7 @@ from fastapi.responses import JSONResponse
 
 from app.api.routes import router as api_router
 from app.api.auth import router as auth_router
+from app.api.billing import router as billing_router
 from app.api.larpbot import router as larpbot_router
 from app.api.websocket import websocket_endpoint, start_broadcast_loop, stop_broadcast_loop, on_worker_event
 from app.core.config import settings
@@ -109,6 +110,7 @@ app.add_middleware(
 # ── REST Routes ───────────────────────────────────────────────────────────────
 app.include_router(api_router)
 app.include_router(auth_router)
+app.include_router(billing_router)
 app.include_router(larpbot_router)
 
 

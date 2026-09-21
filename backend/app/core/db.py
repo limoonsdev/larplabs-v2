@@ -40,6 +40,16 @@ def init_db() -> None:
                 last_login INTEGER
             )"""
         )
+        # Colonnes billing (migration douce si DB existante)
+        for col in (
+            "ALTER TABLE users ADD COLUMN plan_updated_at INTEGER",
+            "ALTER TABLE users ADD COLUMN last4 TEXT",
+            "ALTER TABLE users ADD COLUMN card_brand TEXT",
+        ):
+            try:
+                conn.execute(col)
+            except Exception:
+                pass  # colonne déjà présente
         conn.execute(
             """CREATE TABLE IF NOT EXISTS tokens (
                 token_hash TEXT PRIMARY KEY,
@@ -149,6 +159,46 @@ def delete_token(token: Optional[str]) -> None:
     with _connect() as conn:
         conn.execute("DELETE FROM tokens WHERE token_hash=?", (thash,))
         conn.commit()
+
+
+def set_plan(email: str, plan: str, last4: Optional[str] = None, brand: Optional[str] = None) -> Dict[str, Any]:
+    """Change le plan (checkout LarpPay). Ne stocke que last4 + réseau, jamais le PAN."""
+    if plan not in ("starter", "pro", "max"):
+        raise ValueError("Plan inconnu.")
+    now = int(time.time())
+    with _connect() as conn:
+        cur = conn.execute(
+            "UPDATE users SET plan=?, plan_updated_at=?, last4=?, card_brand=? WHERE email=?",
+            (plan, now, last4, brand, email),
+        )
+        conn.commit()
+        if cur.rowcount == 0:
+            raise ValueError("Compte introuvable.")
+        row = conn.execute(
+            "SELECT email, plan, plan_updated_at, last4, card_brand FROM users WHERE email=?",
+            (email,),
+        ).fetchone()
+    return {
+        "email": row["email"], "plan": row["plan"],
+        "plan_updated_at": row["plan_updated_at"],
+        "last4": row["last4"], "card_brand": row["card_brand"],
+    }
+
+
+def get_subscription(email: str) -> Dict[str, Any]:
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT email, plan, plan_updated_at, last4, card_brand, created_at FROM users WHERE email=?",
+            (email,),
+        ).fetchone()
+    if not row:
+        raise ValueError("Compte introuvable.")
+    return {
+        "email": row["email"], "plan": row["plan"],
+        "plan_updated_at": row["plan_updated_at"],
+        "last4": row["last4"], "card_brand": row["card_brand"],
+        "since": row["created_at"],
+    }
 
 
 def save_preset(owner: str, spec: Dict[str, Any]) -> Dict[str, Any]:

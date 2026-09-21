@@ -134,6 +134,15 @@ export type ChatPreset = {
   actions: Action[];
 };
 
+export type Subscription = {
+  email: string;
+  plan: string;
+  plan_updated_at: number | null;
+  last4: string | null;
+  card_brand: string | null;
+  since: number;
+};
+
 export type WsMessage =
   | { type: "CONNECTED"; data: { message: string; timestamp: number } }
   | { type: "STATS_UPDATE"; data: GlobalStats; ts: number }
@@ -270,6 +279,29 @@ export const backendApi = {
       method: "POST",
       body: JSON.stringify({ messages }),
     }),
+
+  // ── Billing LarpPay ────────────────────────────────────────────────────────
+  checkout: (plan: string, last4: string, brand: string, cardholder: string) =>
+    apiFetch<{
+      ok: boolean;
+      plan: string;
+      provider: string;
+      receipt?: string;
+      workers?: number;
+      message: string;
+      subscription: Subscription;
+    }>("/api/billing/checkout", {
+      method: "POST",
+      body: JSON.stringify({ plan, last4, brand, cardholder }),
+    }),
+
+  subscription: () =>
+    apiFetch<{
+      ok: boolean;
+      provider: string;
+      subscription: Subscription;
+      limits: Record<string, number>;
+    }>("/api/billing/subscription"),
 
   // ── Workers ────────────────────────────────────────────────────────────────
   getWorkers: () =>

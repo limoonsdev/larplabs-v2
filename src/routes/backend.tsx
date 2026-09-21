@@ -616,7 +616,8 @@ function BackendPanel() {
                       </div>
                     </div>
                     <Link
-                      to="/"
+                      to="/checkout"
+                      search={{ plan: "pro" }}
                       className="block px-4 py-2.5 text-sm font-bold hover:bg-lemon transition-colors"
                       onClick={() => setMenuOpen(false)}
                     >

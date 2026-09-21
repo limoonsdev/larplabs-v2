@@ -11,7 +11,11 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as BackendRouteImport } from './routes/backend'
+import { Route as CheckoutRouteImport } from './routes/checkout'
+import { Route as GuidelinesRouteImport } from './routes/guidelines'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as PrivacyRouteImport } from './routes/privacy'
+import { Route as TosRouteImport } from './routes/tos'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -23,40 +27,98 @@ const BackendRoute = BackendRouteImport.update({
   path: '/backend',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CheckoutRoute = CheckoutRouteImport.update({
+  id: '/checkout',
+  path: '/checkout',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GuidelinesRoute = GuidelinesRouteImport.update({
+  id: '/guidelines',
+  path: '/guidelines',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PrivacyRoute = PrivacyRouteImport.update({
+  id: '/privacy',
+  path: '/privacy',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TosRoute = TosRouteImport.update({
+  id: '/tos',
+  path: '/tos',
   getParentRoute: () => rootRouteImport,
 } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/backend': typeof BackendRoute
+  '/checkout': typeof CheckoutRoute
+  '/guidelines': typeof GuidelinesRoute
   '/login': typeof LoginRoute
+  '/privacy': typeof PrivacyRoute
+  '/tos': typeof TosRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/backend': typeof BackendRoute
+  '/checkout': typeof CheckoutRoute
+  '/guidelines': typeof GuidelinesRoute
   '/login': typeof LoginRoute
+  '/privacy': typeof PrivacyRoute
+  '/tos': typeof TosRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/backend': typeof BackendRoute
+  '/checkout': typeof CheckoutRoute
+  '/guidelines': typeof GuidelinesRoute
   '/login': typeof LoginRoute
+  '/privacy': typeof PrivacyRoute
+  '/tos': typeof TosRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/backend' | '/login'
+  fullPaths:
+    | '/'
+    | '/backend'
+    | '/checkout'
+    | '/guidelines'
+    | '/login'
+    | '/privacy'
+    | '/tos'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/backend' | '/login'
-  id: '__root__' | '/' | '/backend' | '/login'
+  to:
+    | '/'
+    | '/backend'
+    | '/checkout'
+    | '/guidelines'
+    | '/login'
+    | '/privacy'
+    | '/tos'
+  id:
+    | '__root__'
+    | '/'
+    | '/backend'
+    | '/checkout'
+    | '/guidelines'
+    | '/login'
+    | '/privacy'
+    | '/tos'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   BackendRoute: typeof BackendRoute
+  CheckoutRoute: typeof CheckoutRoute
+  GuidelinesRoute: typeof GuidelinesRoute
   LoginRoute: typeof LoginRoute
+  PrivacyRoute: typeof PrivacyRoute
+  TosRoute: typeof TosRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -75,11 +137,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BackendRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/checkout': {
+      id: '/checkout'
+      path: '/checkout'
+      fullPath: '/checkout'
+      preLoaderRoute: typeof CheckoutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/guidelines': {
+      id: '/guidelines'
+      path: '/guidelines'
+      fullPath: '/guidelines'
+      preLoaderRoute: typeof GuidelinesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/login': {
       id: '/login'
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/privacy': {
+      id: '/privacy'
+      path: '/privacy'
+      fullPath: '/privacy'
+      preLoaderRoute: typeof PrivacyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/tos': {
+      id: '/tos'
+      path: '/tos'
+      fullPath: '/tos'
+      preLoaderRoute: typeof TosRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -88,7 +178,11 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   BackendRoute: BackendRoute,
+  CheckoutRoute: CheckoutRoute,
+  GuidelinesRoute: GuidelinesRoute,
   LoginRoute: LoginRoute,
+  PrivacyRoute: PrivacyRoute,
+  TosRoute: TosRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

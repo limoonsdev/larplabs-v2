@@ -72,6 +72,7 @@ const FEATURES = [
 
 const PLANS = [
   {
+    id: "starter",
     name: "Starter",
     price: "0€",
     period: "/mois",
@@ -81,6 +82,7 @@ const PLANS = [
     features: ["50 workers Chrome", "3 presets plateformes", "Proxies communautaires", "Stats temps réel"],
   },
   {
+    id: "pro",
     name: "Pro",
     price: "29€",
     period: "/mois",
@@ -97,6 +99,7 @@ const PLANS = [
     ],
   },
   {
+    id: "max",
     name: "Max",
     price: "99€",
     period: "/mois",
@@ -233,7 +236,7 @@ function Home() {
       {/* ── Tarifs ── */}
       <section id="tarifs" className="max-w-[1200px] mx-auto px-6 py-10 scroll-mt-24">
         <h2 className="font-display font-extrabold text-4xl text-center mb-2">3 plans simples</h2>
-        <p className="text-center text-ink/55 mb-1">Plans fictifs — démo, aucun paiement.</p>
+        <p className="text-center text-ink/55 mb-1">Starter gratuit · sans engagement · résiliable à tout moment.</p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8 items-stretch">
           {PLANS.map((plan) => (
             <div
@@ -259,7 +262,8 @@ function Home() {
                 ))}
               </ul>
               <Link
-                to="/login"
+                to="/checkout"
+                search={{ plan: plan.id }}
                 className={`mt-8 text-center w-full py-3.5 rounded-2xl border-2 font-display font-extrabold transition-transform active:translate-x-[2px] active:translate-y-[2px] ${
                   plan.badge
                     ? "bg-lemon text-ink border-ink shadow-[5px_5px_0_0_rgba(0,0,0,0.4)]"
@@ -293,8 +297,16 @@ function Home() {
             </Link>
           </div>
         </div>
-        <footer className="text-center text-xs font-mono text-ink/40 py-10">
-          LarpLabs V2 — Starter gratuit inclus, plans Pro/Max fictifs pour la démo.
+        <footer className="text-center py-10 flex flex-col items-center gap-3">
+          <div className="flex items-center gap-5 text-xs font-bold">
+            <Link to="/tos" className="hover:text-berry transition-colors">CGU</Link>
+            <Link to="/guidelines" className="hover:text-berry transition-colors">Règles d'usage</Link>
+            <Link to="/privacy" className="hover:text-berry transition-colors">Confidentialité</Link>
+            <Link to="/checkout" search={{ plan: "pro" }} className="hover:text-berry transition-colors">Tarifs</Link>
+          </div>
+          <div className="text-[11px] font-mono text-ink/40">
+            LarpLabs V2 · Paiements sécurisés par LarpPay Services · support@larplabs-v2.com
+          </div>
         </footer>
       </section>
       <LarpBot />
