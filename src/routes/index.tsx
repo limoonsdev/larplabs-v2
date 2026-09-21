@@ -23,8 +23,8 @@ const FEATURES = [
     icon: "⚡",
     bg: "bg-lemon",
     fg: "text-ink",
-    title: "Vetting x10 simultanés",
-    text: "10 workers de vérification en parallèle, latence mesurée, progression en direct.",
+    title: "Vetting x100 turbo",
+    text: "100 vérifications en parallèle, latence mesurée, progression en direct.",
   },
   {
     icon: "🌍",
@@ -95,7 +95,7 @@ const PLANS = [
       "12 presets plateformes",
       "Resolver captcha + OCR",
       "Stats par pays",
-      "Vetting prioritaire x10",
+      "Vetting prioritaire x100",
     ],
   },
   {
@@ -165,7 +165,7 @@ function Home() {
           comme des pros.
         </h1>
         <p className="text-ink/60 text-lg mt-6 max-w-[640px] mx-auto">
-          Jusqu'à 1500 instances à 5-15 MB de RAM, proxies multi-sources vérifiés x10,
+          Jusqu'à 1500 instances à 5-15 MB de RAM, proxies multi-sources vérifiés x100,
           12 presets plateformes et resolver Cloudflare auto. Le tout en temps réel.
         </p>
         <div className="flex items-center justify-center gap-3 mt-8 flex-wrap">
@@ -183,7 +183,7 @@ function Home() {
           </button>
         </div>
         <div className="flex items-center justify-center gap-2 mt-8 flex-wrap font-mono text-xs">
-          {["1500 workers max", "78 sources proxy", "10 vérifs simultanées", `${PLATFORM_PRESETS.length} presets`].map((s) => (
+          {["1500 workers max", "78 sources proxy", "100 vérifs simultanées", `${PLATFORM_PRESETS.length} presets`].map((s) => (
             <span key={s} className="px-3 py-1.5 rounded-full bg-white border-2 border-ink/15">
               {s}
             </span>

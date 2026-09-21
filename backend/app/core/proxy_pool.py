@@ -159,12 +159,16 @@ SOURCES: List[Dict] = [
 class ProxyPool:
     """
     Pool de proxies auto-rafraichi depuis ~78 sources (GitHub + APIs).
-    - Vetting asynchrone avec 10 workers simultanes (semaphore)
+    - Vetting turbo : session HTTP partagee, 100 verifs paralleles,
+      endpoint 204 ultra-rapide + fallback, latence mesuree
     - Rotation round-robin sur proxies verifies
     - Stats par protocole, source et pays
     """
 
-    VET_URL = "http://httpbin.org/ip"
+    VET_URLS = [
+        "http://www.google.com/generate_204",  # 204 vide, ultra-rapide (test de connectivite)
+        "http://httpbin.org/ip",               # fallback neutre
+    ]
 
     def __init__(self):
         self._all: List[ProxyEntry] = []
@@ -351,34 +355,46 @@ class ProxyPool:
                 self._candidate_idx = 0
         return self._all
 
-    # ── Vetting (10 workers simultanes) ────────────────────────────────────
+    # ── Vetting turbo (session partagee + 100 verifs simultanees) ─────────
 
-    async def _test_proxy(self, entry: ProxyEntry) -> bool:
-        """Teste un proxy contre httpbin.org/ip. Max 10 tests simultanes."""
+    async def _test_proxy(self, entry: ProxyEntry, session: aiohttp.ClientSession) -> bool:
+        """Teste un proxy (generate_204 rapide puis fallback httpbin)."""
         async with self._vet_sem:
-            timeout = aiohttp.ClientTimeout(total=settings.PROXY_VET_TIMEOUT_SECONDS)
+            timeout = aiohttp.ClientTimeout(
+                total=settings.PROXY_VET_TIMEOUT_SECONDS,
+                connect=3.0,
+            )
             t0 = time.perf_counter()
             try:
-                connector = aiohttp.TCPConnector(ssl=False)
-                async with aiohttp.ClientSession(connector=connector) as session:
-                    async with session.get(
-                        self.VET_URL,
-                        proxy=entry.url if entry.kind == "http" else None,
-                        timeout=timeout,
-                        headers={"Cache-Control": "no-cache"},
-                    ) as resp:
-                        ok = 0 < resp.status < 500
-                        if ok:
-                            entry.latency_ms = int((time.perf_counter() - t0) * 1000)
-                        return ok
-            except Exception:
+                for vet_url in self.VET_URLS:
+                    try:
+                        async with session.get(
+                            vet_url,
+                            proxy=entry.url if entry.kind == "http" else None,
+                            timeout=timeout,
+                            headers={"Cache-Control": "no-cache"},
+                            allow_redirects=False,
+                        ) as resp:
+                            # 204 (generate_204) ou 2xx/3xx/4xx = le proxy repond
+                            if 0 < resp.status < 500:
+                                entry.latency_ms = int((time.perf_counter() - t0) * 1000)
+                                # Consomme le body du fallback pour liberer la connexion
+                                if vet_url != self.VET_URLS[0]:
+                                    await resp.read()
+                                return True
+                    except Exception:
+                        continue
                 return False
             finally:
                 self._vet_checked += 1
 
-    async def _vet_wave(self, candidates: List[ProxyEntry]) -> List[ProxyEntry]:
-        """Teste une vague de proxies (10 en parallele via semaphore)."""
-        flags = await asyncio.gather(*[self._test_proxy(e) for e in candidates], return_exceptions=True)
+    async def _vet_wave(
+        self, session: aiohttp.ClientSession, candidates: List[ProxyEntry]
+    ) -> List[ProxyEntry]:
+        """Teste une vague de proxies (N en parallele via semaphore)."""
+        flags = await asyncio.gather(
+            *[self._test_proxy(e, session) for e in candidates], return_exceptions=True
+        )
         good = []
         for ok, entry in zip(flags, candidates):
             if ok is True:
@@ -403,7 +419,7 @@ class ProxyPool:
         return self._live
 
     async def _run_vetting(self, min_live: int):
-        """Tache de vetting en background (10 verifications simultanees)."""
+        """Tache de vetting turbo en background (session partagee + N verifs paralleles)."""
         self._vetting = True
         self._vet_checked = 0
         try:
@@ -413,33 +429,43 @@ class ProxyPool:
             if not candidates:
                 return
 
+            concurrency = max(1, settings.PROXY_VET_CONCURRENCY)
+            self._vet_sem = asyncio.Semaphore(concurrency)
             self._vet_total = min(len(candidates), settings.PROXY_VET_WAVE_SIZE * 12)
             wave_size = settings.PROXY_VET_WAVE_SIZE
             max_waves = 12
             waves = 0
+            t_start = time.perf_counter()
 
-            while len(self._live) < min_live and waves < max_waves:
-                waves += 1
-                batch: List[ProxyEntry] = []
-                for _ in range(wave_size):
-                    idx = self._candidate_idx % len(candidates)
-                    batch.append(candidates[idx])
-                    self._candidate_idx += 1
+            connector = aiohttp.TCPConnector(
+                limit=concurrency * 2, limit_per_host=0, ssl=False, ttl_dns_cache=300
+            )
+            async with aiohttp.ClientSession(connector=connector) as session:
+                while len(self._live) < min_live and waves < max_waves:
+                    waves += 1
+                    batch: List[ProxyEntry] = []
+                    for _ in range(wave_size):
+                        idx = self._candidate_idx % len(candidates)
+                        batch.append(candidates[idx])
+                        self._candidate_idx += 1
 
-                good = await self._vet_wave(batch)
-                existing_urls = {e.url for e in self._live}
-                for e in good:
-                    if e.url not in existing_urls:
-                        self._live.append(e)
-                        existing_urls.add(e.url)
+                    good = await self._vet_wave(session, batch)
+                    existing_urls = {e.url for e in self._live}
+                    for e in good:
+                        if e.url not in existing_urls:
+                            self._live.append(e)
+                            existing_urls.add(e.url)
 
-                logger.info(
-                    f"proxy_pool vetting wave {waves}: "
-                    f"+{len(good)} live (total live={len(self._live)})"
-                )
+                    elapsed = time.perf_counter() - t_start
+                    rate = self._vet_checked / max(0.1, elapsed)
+                    logger.info(
+                        f"proxy_pool vetting wave {waves}: "
+                        f"+{len(good)} live (total live={len(self._live)}, "
+                        f"{self._vet_checked} testes en {elapsed:.0f}s soit {rate:.0f}/s)"
+                    )
 
-                if len(self._live) >= min_live:
-                    break
+                    if len(self._live) >= min_live:
+                        break
 
             # Enrichissement pays (best-effort, background, non-bloquant)
             if settings.PROXY_GEO_ENABLED and self._live:

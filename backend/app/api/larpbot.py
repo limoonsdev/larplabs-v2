@@ -38,6 +38,7 @@ Regles :
 """
 
 PRESET_RE = re.compile(r"```preset-json\s*(\{.*?\})\s*```", re.DOTALL)
+JSON_RE = re.compile(r"```json\s*(\{.*?\})\s*```", re.DOTALL)
 
 
 class ChatMessage(BaseModel):
@@ -70,13 +71,17 @@ class PresetSpec(BaseModel):
 
 
 def _extract_preset(text: str) -> Optional[Dict[str, Any]]:
-    m = PRESET_RE.search(text or "")
-    if not m:
-        return None
-    try:
-        return json.loads(m.group(1))
-    except Exception:
-        return None
+    for rx in (PRESET_RE, JSON_RE):
+        m = rx.search(text or "")
+        if not m:
+            continue
+        try:
+            data = json.loads(m.group(1))
+            if isinstance(data, dict) and "actions" in data:
+                return data
+        except Exception:
+            continue
+    return None
 
 
 @router.post("/chat", summary="Parler au LarpBot (construit des presets)")
@@ -109,7 +114,7 @@ async def chat(body: ChatBody, request: Request) -> Dict:
             data["actions"] = [a.model_dump(exclude_none=True) for a in spec.actions]
             saved = db.save_preset(user["email"], data)
             preset = {"id": saved["id"], **data}
-            reply = PRESET_RE.sub("", reply).strip()
+            reply = JSON_RE.sub("", PRESET_RE.sub("", reply)).strip()
             reply += f"\n\n✅ Preset « {spec.name} » construit et ajouté à ta bibliothèque."
         except Exception as e:
             logger.debug(f"larpbot: preset invalide: {e}")

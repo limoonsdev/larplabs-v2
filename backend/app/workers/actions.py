@@ -37,7 +37,7 @@ class Action(BaseModel):
     selector: Optional[str] = Field(None, description="Sélecteur CSS de l'élément cible")
     value: Optional[str] = Field(None, description="Texte à saisir, touche clavier, ou URL")
     count: int = Field(1, ge=1, le=5000, description="Nombre de fois à répéter l'action")
-    delay_ms: int = Field(50, ge=0, le=10000, description="Délai en ms entre répétitions")
+    delay_ms: int = Field(50, ge=0, le=120000, description="Délai en ms entre répétitions (watch-time OK)")
     x: Optional[int] = Field(None, description="Coordonnée X pour clic sans sélecteur")
     y: Optional[int] = Field(None, description="Coordonnée Y pour clic sans sélecteur")
     timeout_ms: int = Field(5000, ge=100, le=30000, description="Timeout pour trouver l'élément")

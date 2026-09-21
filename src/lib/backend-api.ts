@@ -205,7 +205,7 @@ export function clearToken() {
 
 export const backendApi = {
   // ── Health ─────────────────────────────────────────────────────────────────
-  health: () => apiFetch<{ status: string }>("/api/health"),
+  health: () => apiFetch<{ status: string; version?: string; app?: string }>("/api/health"),
 
   // ── Session ────────────────────────────────────────────────────────────────
   startSession: (config: SessionConfig) =>
@@ -231,7 +231,11 @@ export const backendApi = {
 
   // ── Proxies ────────────────────────────────────────────────────────────────
   getProxies: () =>
-    apiFetch<{ ok: boolean; stats: ProxyStats; live_sample: unknown[] }>("/api/proxies"),
+    apiFetch<{
+      ok: boolean;
+      stats: ProxyStats;
+      live_sample: { hostport: string; kind: string; country: string; source: string; latency_ms: number }[];
+    }>("/api/proxies"),
 
   refreshProxies: () =>
     apiFetch<{ ok: boolean; message: string }>("/api/proxies/refresh", { method: "POST", body: "{}" }),

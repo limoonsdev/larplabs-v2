@@ -13,10 +13,10 @@ services:
     shm_size: 2gb
     environment:
       - MAX_WORKERS=1500
-      - PROXY_VET_CONCURRENCY=10
+      - PROXY_VET_CONCURRENCY=100
       # IA (LarpBot + captcha) : exporte GROQ_API_KEY sur l'hôte avant up
       - GROQ_API_KEY=${GROQ_API_KEY:-}
-      - GROQ_MODEL=${GROQ_MODEL:-qwen/qwen3-32b}
+      - GROQ_MODEL=${GROQ_MODEL:-qwen/qwen3.8-27b}
     volumes:
       # Persistance SQLite (users, tokens, bibliothèque presets)
       - backend-data:/app/data

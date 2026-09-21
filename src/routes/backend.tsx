@@ -218,6 +218,7 @@ function BackendPanel() {
   // ── Backend connection ───────────────────────────────────────────────────
   const [connected, setConnected] = useState(false);
   const [backendOnline, setBackendOnline] = useState<boolean | null>(null);
+  const [backendVersion, setBackendVersion] = useState<string | null>(null);
 
   // ── Session config ───────────────────────────────────────────────────────
   const [url, setUrl] = useState("");
@@ -236,6 +237,11 @@ function BackendPanel() {
   const [library, setLibrary] = useState<LibraryPreset[]>([]);
   const [libraryName, setLibraryName] = useState("");
   const [cappedMsg, setCappedMsg] = useState<string | null>(null);
+  const [tab, setTab] = useState<"workers" | "logs" | "proxies">("logs");
+  const [showAllPresets, setShowAllPresets] = useState(false);
+  const [liveSample, setLiveSample] = useState<
+    { hostport: string; kind: string; country: string; source: string; latency_ms: number }[]
+  >([]);
   const navigate = useNavigate();
 
   // ── Probe ─────────────────────────────────────────────────────────────────
@@ -264,8 +270,14 @@ function BackendPanel() {
   useEffect(() => {
     backendApi
       .health()
-      .then(() => setBackendOnline(true))
-      .catch(() => setBackendOnline(false));
+      .then((h) => {
+        setBackendOnline(true);
+        setBackendVersion(h.version ?? null);
+      })
+      .catch(() => {
+        setBackendOnline(false);
+        setBackendVersion(null);
+      });
     backendApi
       .captchaStatus()
       .then((r) => setCaptchaOcr(r.ocr))
@@ -501,6 +513,12 @@ function BackendPanel() {
     };
   }, [authed, refreshLibrary, applyFullPreset]);
 
+  // ── Échantillon proxies à l'ouverture de l'onglet ──────────────────────────
+  useEffect(() => {
+    if (tab !== "proxies" || !backendOnline) return;
+    backendApi.getProxies().then((r) => setLiveSample(r.live_sample ?? [])).catch(() => {});
+  }, [tab, backendOnline]);
+
   // Chargement session
   if (authed === null) {
     return (
@@ -584,6 +602,18 @@ function BackendPanel() {
                   : "Backend hors ligne"}
               </span>
             </div>
+            {backendOnline && (
+              <span
+                className={`hidden sm:inline-block text-[10px] font-mono px-2 py-0.5 rounded-full border ${
+                  backendVersion === "2.1.0"
+                    ? "bg-mint/30 border-ink/20"
+                    : "bg-tangerine/40 border-ink/20"
+                }`}
+                title={backendVersion === "2.1.0" ? "Backend à jour" : "Mets à jour + redémarre le backend (git pull + python start.py)"}
+              >
+                {backendVersion ? `v${backendVersion}` : "v? maj requise"}
+              </span>
+            )}
             <Link
               to="/"
               className="hidden md:block px-3 py-1.5 rounded-xl border-2 border-ink/20 text-xs font-bold hover:bg-lemon transition-colors"
@@ -660,7 +690,7 @@ function BackendPanel() {
               1 clic = URL + workers + actions optimisés.
             </p>
             <div className="grid grid-cols-3 gap-2">
-              {PLATFORM_PRESETS.map((p) => (
+              {(showAllPresets ? PLATFORM_PRESETS : PLATFORM_PRESETS.slice(0, 6)).map((p) => (
                 <button
                   key={p.id}
                   onClick={() => applyPreset(p.id)}
@@ -682,6 +712,12 @@ function BackendPanel() {
                 </button>
               ))}
             </div>
+            <button
+              onClick={() => setShowAllPresets((v) => !v)}
+              className="mt-2 w-full py-2 rounded-xl border-2 border-ink/15 text-xs font-bold hover:bg-lemon/50 transition-colors"
+            >
+              {showAllPresets ? "Réduire" : `Voir les ${PLATFORM_PRESETS.length} presets`}
+            </button>
             {activePreset && (
               <p className="text-[11px] font-mono text-ink/50 mt-3">
                 ✅ {PLATFORM_PRESETS.find((x) => x.id === activePreset)?.description}
@@ -1062,108 +1098,240 @@ function BackendPanel() {
             />
           </div>
 
+          {/* Onglets : fini le scroll infini */}
+          <div className="flex gap-2">
+            <button
+              onClick={() => setTab("workers")}
+              className={`flex-1 py-2.5 rounded-2xl border-2 text-sm font-bold transition-all ${
+                tab === "workers"
+                  ? "bg-ink text-cream border-ink shadow-[3px_3px_0_0_var(--berry)]"
+                  : "bg-white border-ink/20 hover:border-ink"
+              }`}
+            >
+              Workers ({workers.length})
+            </button>
+            <button
+              onClick={() => setTab("logs")}
+              className={`flex-1 py-2.5 rounded-2xl border-2 text-sm font-bold transition-all ${
+                tab === "logs"
+                  ? "bg-ink text-cream border-ink shadow-[3px_3px_0_0_var(--berry)]"
+                  : "bg-white border-ink/20 hover:border-ink"
+              }`}
+            >
+              Logs ({logs.length})
+            </button>
+            <button
+              onClick={() => setTab("proxies")}
+              className={`flex-1 py-2.5 rounded-2xl border-2 text-sm font-bold transition-all ${
+                tab === "proxies"
+                  ? "bg-ink text-cream border-ink shadow-[3px_3px_0_0_var(--berry)]"
+                  : "bg-white border-ink/20 hover:border-ink"
+              }`}
+            >
+              Proxies ({proxyStats?.alive ?? 0} live)
+            </button>
+          </div>
+
           {/* Workers table */}
+          {tab === "workers" ? <WorkersPanel workers={workers} /> : null}
+
+          {/* Live log */}
+          {tab === "logs" ? <LogsPanel logs={logs} running={running} onClear={() => setLogs([])} /> : null}
+          {tab === "proxies" ? (
           <div className="bg-white rounded-[2rem] border-2 border-ink p-6">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-display font-extrabold text-xl">Workers actifs</h3>
-              <span className="text-xs font-mono text-ink/50">
-                {workers.length} affichés
-              </span>
+              <h3 className="font-display font-extrabold text-xl">Proxies live</h3>
+              <button
+                onClick={() => {
+                  void refreshProxies();
+                  backendApi.getProxies().then((r) => setLiveSample(r.live_sample ?? [])).catch(() => {});
+                }}
+                disabled={!backendOnline}
+                className="text-[11px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-xl border-2 border-ink bg-lemon hover:bg-yellow-200 disabled:opacity-40"
+              >
+                ↺ Refresh
+              </button>
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs font-mono">
-                <thead>
-                  <tr className="text-ink/50 border-b-2 border-ink/10">
-                    <th className="text-left pb-2">ID</th>
-                    <th className="text-left pb-2">Status</th>
-                    <th className="text-right pb-2">Req</th>
-                    <th className="text-right pb-2">Err</th>
-                    <th className="text-right pb-2">RPS</th>
-                    <th className="text-left pb-2">Proxy</th>
-                    <th className="text-left pb-2">Action</th>
+            {proxyStats?.by_country && Object.keys(proxyStats.by_country).length > 0 && (
+              <div className="mb-4">
+                <div className="text-[11px] uppercase tracking-[0.16em] text-ink/50 font-bold mb-2">
+                  Pays ({Object.keys(proxyStats.by_country).length})
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {Object.entries(proxyStats.by_country).map(([c, n]) => (
+                    <span key={c} className="text-[11px] font-mono px-2.5 py-1 rounded-lg bg-cream border-2 border-ink/10">
+                      {c} <b>{n}</b>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {proxyStats?.by_source && Object.keys(proxyStats.by_source).length > 0 && (
+              <div className="mb-4">
+                <div className="text-[11px] uppercase tracking-[0.16em] text-ink/50 font-bold mb-2">
+                  Sources ({Object.keys(proxyStats.by_source).length})
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                  {Object.entries(proxyStats.by_source).map(([s, n]) => (
+                    <div key={s} className="flex items-center gap-2 text-[11px] font-mono bg-cream rounded-lg px-2.5 py-1.5">
+                      <span className="truncate flex-1">{s}</span>
+                      <b>{n}</b>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div className="text-[11px] uppercase tracking-[0.16em] text-ink/50 font-bold mb-2">
+              Échantillon live ({liveSample.length})
+            </div>
+            <div className="overflow-y-auto max-h-[260px] rounded-xl border-2 border-ink/10">
+              <table className="w-full text-[11px] font-mono">
+                <thead className="sticky top-0 bg-cream">
+                  <tr className="text-ink/50">
+                    <th className="text-left p-2">Proxy</th>
+                    <th className="text-left p-2">Type</th>
+                    <th className="text-left p-2">Pays</th>
+                    <th className="text-right p-2">Latence</th>
+                    <th className="text-left p-2">Source</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {workers.slice(0, 20).map((w) => (
-                    <tr key={w.id} className="border-b border-ink/5 hover:bg-cream/50">
-                      <td className="py-1.5 text-ink/70">{w.id}</td>
-                      <td className="py-1.5">
-                        <span
-                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                            w.status === "running"
-                              ? "bg-mint text-ink"
-                              : w.status === "error"
-                              ? "bg-berry text-white"
-                              : "bg-ink/10 text-ink/60"
-                          }`}
-                        >
-                          {w.status}
-                        </span>
-                      </td>
-                      <td className="py-1.5 text-right">{fmtNum(w.requests_done)}</td>
-                      <td className="py-1.5 text-right text-berry">{w.errors || "-"}</td>
-                      <td className="py-1.5 text-right text-mint">{w.rps.toFixed(1)}</td>
-                      <td className="py-1.5 text-ink/50 truncate max-w-[100px]">{w.proxy_used || "—"}</td>
-                      <td className="py-1.5 text-ink/60 truncate max-w-[120px]">{w.action_description || "—"}</td>
+                  {liveSample.map((p) => (
+                    <tr key={p.hostport} className="border-t border-ink/5">
+                      <td className="p-2">{p.hostport}</td>
+                      <td className="p-2">{p.kind}</td>
+                      <td className="p-2 font-bold">{p.country}</td>
+                      <td className="p-2 text-right">{p.latency_ms ? `${p.latency_ms}ms` : "—"}</td>
+                      <td className="p-2 text-ink/50 truncate max-w-[140px]">{p.source}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-              {workers.length === 0 && (
-                <div className="text-center text-ink/40 font-mono text-sm py-6">
-                  Aucun worker actif.
+              {liveSample.length === 0 && (
+                <div className="text-center text-ink/40 font-mono text-xs py-6">
+                  Ouvre cet onglet pour charger l'échantillon.
                 </div>
               )}
             </div>
           </div>
-
-          {/* Live log */}
-          <div className="bg-ink text-cream rounded-[2rem] border-2 border-ink p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-display font-extrabold text-xl">Log temps réel</h3>
-              <div className="flex items-center gap-3">
-                <span className="text-xs font-mono text-cream/50">
-                  {running ? "● streaming" : "paused"}
-                </span>
-                <button
-                  onClick={() => setLogs([])}
-                  className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-lg border border-cream/20 text-cream/50 hover:text-cream hover:border-cream/50"
-                >
-                  Clear
-                </button>
-              </div>
-            </div>
-            <div className="font-mono text-sm flex flex-col gap-1.5 min-h-[180px] max-h-[300px] overflow-y-auto">
-              {logs.length === 0 && (
-                <div className="text-cream/40">
-                  En attente de traffic... Démarre une session.
-                </div>
-              )}
-              {logs.map((l) => (
-                <div key={l.id} className="flex items-start gap-2 leading-tight">
-                  <span className={`shrink-0 ${statusColor(l.status_code)}`}>
-                    {l.status_code === 0 ? "err" : l.status_code}
-                  </span>
-                  <span className="text-cream/50 shrink-0">{l.worker_id}</span>
-                  <span className="text-cream/80 truncate">{l.url}</span>
-                  {l.proxy && (
-                    <span className="text-lemon/70 shrink-0 truncate max-w-[120px]">
-                      via {l.proxy}
-                    </span>
-                  )}
-                  {l.action && (
-                    <span className="text-tangerine/80 shrink-0">{l.action}</span>
-                  )}
-                  <span className="text-cream/40 shrink-0 ml-auto">
-                    {l.error ? l.error : `${l.ms}ms`}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
+          ) : null}
         </section>
       </div>
       <LarpBot />
+    </div>
+  );
+}
+
+function WorkersPanel({ workers }: { workers: WorkerInfo[] }) {
+  return (
+    <div className="bg-white rounded-[2rem] border-2 border-ink p-6">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="font-display font-extrabold text-xl">Workers actifs</h3>
+        <span className="text-xs font-mono text-ink/50">
+          {workers.length} affichés
+        </span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs font-mono">
+          <thead>
+            <tr className="text-ink/50 border-b-2 border-ink/10">
+              <th className="text-left pb-2">ID</th>
+              <th className="text-left pb-2">Status</th>
+              <th className="text-right pb-2">Req</th>
+              <th className="text-right pb-2">Err</th>
+              <th className="text-right pb-2">RPS</th>
+              <th className="text-left pb-2">Proxy</th>
+              <th className="text-left pb-2">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {workers.slice(0, 30).map((w) => (
+              <tr key={w.id} className="border-b border-ink/5 hover:bg-cream/50">
+                <td className="py-1.5 text-ink/70">{w.id}</td>
+                <td className="py-1.5">
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                      w.status === "running"
+                        ? "bg-mint text-ink"
+                        : w.status === "error"
+                        ? "bg-berry text-white"
+                        : "bg-ink/10 text-ink/60"
+                    }`}
+                  >
+                    {w.status}
+                  </span>
+                </td>
+                <td className="py-1.5 text-right">{fmtNum(w.requests_done)}</td>
+                <td className="py-1.5 text-right text-berry">{w.errors || "-"}</td>
+                <td className="py-1.5 text-right text-mint">{w.rps.toFixed(1)}</td>
+                <td className="py-1.5 text-ink/50 truncate max-w-[100px]">{w.proxy_used || "-"}</td>
+                <td className="py-1.5 text-ink/60 truncate max-w-[120px]">{w.action_description || "-"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {workers.length === 0 && (
+          <div className="text-center text-ink/40 font-mono text-sm py-6">
+            Aucun worker actif.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function LogsPanel({
+  logs,
+  running,
+  onClear,
+}: {
+  logs: LogEntry[];
+  running: boolean;
+  onClear: () => void;
+}) {
+  return (
+    <div className="bg-ink text-cream rounded-[2rem] border-2 border-ink p-6">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="font-display font-extrabold text-xl">Log temps réel</h3>
+        <div className="flex items-center gap-3">
+          <span className="text-xs font-mono text-cream/50">
+            {running ? "streaming" : "paused"}
+          </span>
+          <button
+            onClick={onClear}
+            className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-lg border border-cream/20 text-cream/50 hover:text-cream hover:border-cream/50"
+          >
+            Clear
+          </button>
+        </div>
+      </div>
+      <div className="font-mono text-sm flex flex-col gap-1.5 min-h-[240px] max-h-[460px] overflow-y-auto">
+        {logs.length === 0 && (
+          <div className="text-cream/40">
+            En attente de traffic... Démarre une session.
+          </div>
+        )}
+        {logs.map((l) => (
+          <div key={l.id} className="flex items-start gap-2 leading-tight">
+            <span className={`shrink-0 ${statusColor(l.status_code)}`}>
+              {l.status_code === 0 ? "err" : l.status_code}
+            </span>
+            <span className="text-cream/50 shrink-0">{l.worker_id}</span>
+            <span className="text-cream/80 truncate">{l.url}</span>
+            {l.proxy && (
+              <span className="text-lemon/70 shrink-0 truncate max-w-[120px]">
+                via {l.proxy}
+              </span>
+            )}
+            {l.action && (
+              <span className="text-tangerine/80 shrink-0">{l.action}</span>
+            )}
+            <span className="text-cream/40 shrink-0 ml-auto">
+              {l.error ? l.error : `${l.ms}ms`}
+            </span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

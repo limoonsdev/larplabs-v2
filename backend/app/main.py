@@ -1,4 +1,4 @@
-"""
+﻿"""
 LarpLabs V2 - FastAPI Application
 Wires together: CORS, REST routes, WebSocket panel, lifespan
 """
@@ -62,6 +62,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Démarrer le broadcast WebSocket
     await start_broadcast_loop()
 
+    paths = sorted({getattr(r, "path", "") for r in app.routes})
+    logger.info(f"OK {len(paths)} routes (billing={'/api/billing/checkout' in paths})")
+
     logger.info("OK Proxy pool -> pull multi-sources en background")
     logger.info("OK WebSocket broadcast loop démarré")
     logger.info(f"OK Serveur prêt sur http://{settings.HOST}:{settings.PORT}")
@@ -86,7 +89,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
 app = FastAPI(
     title="LarpLabs V2 Backend",
-    version="2.0.0",
+    version="2.1.0",
     description=(
         "Backend haute performance pour LarpLabs V2. "
         "Chrome drivers turbo ultra-legers (5-15 MB RAM), "
@@ -145,7 +148,7 @@ async def ws_panel(websocket: WebSocket) -> None:
 async def root() -> JSONResponse:
     return JSONResponse({
         "app": "LarpLabs V2 Backend",
-        "version": "2.0.0",
+        "version": "2.1.0",
         "docs": "/docs",
         "ws": "ws://localhost:8000/ws/panel",
         "api": "/api",
@@ -157,7 +160,7 @@ async def health() -> JSONResponse:
     return JSONResponse({
         "status": "ok",
         "app": "LarpLabs V2 Backend",
-        "version": "2.0.0",
+        "version": "2.1.0",
         "workers_active": len(worker_pool.get_workers_list()),
         "proxy_live": proxy_pool.live_count,
     })

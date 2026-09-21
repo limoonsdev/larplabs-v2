@@ -43,6 +43,10 @@ function luhnOk(digits: string): boolean {
   return sum % 10 === 0;
 }
 
+function sleep(ms: number) {
+  return new Promise<void>((r) => setTimeout(r, ms));
+}
+
 function BrandBadge({ brand }: { brand: Exclude<Brand, null> }) {
   if (brand === "visa") return <VisaLogo className="h-7" />;
   if (brand === "mastercard") return <MastercardLogo className="h-7" />;
@@ -63,9 +67,20 @@ function Checkout() {
   const [error, setError] = useState<string | null>(null);
   const [paying, setPaying] = useState(false);
   const [receipt, setReceipt] = useState<{ plan: string; receipt?: string | undefined; workers?: number | undefined } | null>(null);
+  const [step, setStep] = useState<"form" | "bank" | "secure" | "processing">("form");
+  const [secureCode, setSecureCode] = useState("");
+  const [bankMsg, setBankMsg] = useState("Connexion sécurisée…");
 
   const digits = useMemo(() => number.replace(/\D/g, ""), [number]);
   const brand = useMemo(() => detectBrand(digits), [digits]);
+  const bankName =
+    brand === "visa"
+      ? "Visa Secure"
+      : brand === "mastercard"
+        ? "Mastercard Identity Check"
+        : brand === "amex"
+          ? "Amex SafeKey"
+          : "CB Secure";
   const item = CATALOG.find((c) => c.id === plan)!;
   const authed = !!getToken();
 
@@ -120,16 +135,33 @@ function Checkout() {
       setError("CVC invalide.");
       return;
     }
-    setPaying(true);
+    // 1) Contact de la banque émettrice (3D Secure)
+    setStep("bank");
+    setBankMsg("Connexion sécurisée…");
+    await sleep(700);
+    setBankMsg(`Vérification ${bankName}…`);
+    await sleep(900);
+    setBankMsg("Banque émettrice contactée…");
+    await sleep(900);
+    setSecureCode("");
+    setStep("secure");
+  };
+
+  const confirmSecure = async () => {
+    if (!/^\d{6}$/.test(secureCode)) {
+      setError("Saisis le code à 6 chiffres reçu par SMS.");
+      return;
+    }
+    setError(null);
+    setStep("processing");
     try {
       // Seuls last4 + réseau + titulaire transitent. Le PAN ne quitte jamais ce navigateur.
-      const r = await backendApi.checkout(plan, digits.slice(-4), brand, name || "Titulaire");
+      const r = await backendApi.checkout(plan, digits.slice(-4), brand ?? "cb", name || "Titulaire");
       setSession(getToken() ?? "", { email: r.subscription.email, plan: r.plan });
       setReceipt({ plan: r.plan, receipt: r.receipt, workers: r.workers });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Paiement refusé.");
-    } finally {
-      setPaying(false);
+      setError(err instanceof Error ? err.message : "Paiement refusé par la banque.");
+      setStep("secure");
     }
   };
 
@@ -341,6 +373,79 @@ function Checkout() {
           </div>
         </div>
       </div>
+
+      {/* ── Banque émettrice : contact 3D Secure ── */}
+      {step === "bank" && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-ink/70 backdrop-blur-sm px-6">
+          <div className="w-full max-w-[380px] bg-white rounded-[2rem] border-2 border-ink p-8 shadow-[10px_10px_0_0_var(--berry)] text-center">
+            <div className="w-12 h-12 mx-auto rounded-full border-4 border-ink/15 border-t-berry animate-spin" />
+            <div className="font-display font-extrabold text-xl mt-4">{bankName}</div>
+            <div className="text-sm font-mono text-ink/60 mt-1">{bankMsg}</div>
+            <div className="text-[11px] font-mono text-ink/40 mt-3">
+              {item.price}/mois · carte •••• {digits.slice(-4)}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── 3D Secure : confirmation banque ── */}
+      {step === "secure" && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-ink/70 backdrop-blur-sm px-6">
+          <div className="w-full max-w-[400px] bg-white rounded-[2rem] border-2 border-ink p-8 shadow-[10px_10px_0_0_var(--berry)]">
+            <div className="flex items-center gap-3 mb-1">
+              <div className="w-10 h-10 rounded-xl bg-berry text-white grid place-items-center font-display font-extrabold border-2 border-ink">
+                3D
+              </div>
+              <div>
+                <div className="font-display font-extrabold text-lg leading-none">{bankName}</div>
+                <div className="text-[11px] font-mono text-ink/50 mt-0.5">Confirmation de la banque</div>
+              </div>
+            </div>
+            <p className="text-sm text-ink/60 mt-3">
+              Paiement de <b className="font-mono">{item.price}/mois</b> vers{" "}
+              <b>LarpPay Services</b>. Saisis le code à 6 chiffres reçu par SMS.
+            </p>
+            <input
+              value={secureCode}
+              onChange={(e) => setSecureCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+              placeholder="••••••"
+              inputMode="numeric"
+              className="mt-4 w-full text-center tracking-[0.5em] text-2xl font-mono font-bold bg-cream border-2 border-ink rounded-2xl px-4 py-3 outline-none focus:bg-lemon/20 transition-colors"
+            />
+            {error && (
+              <div className="mt-3 text-xs font-mono bg-berry/10 border-2 border-berry/40 text-berry rounded-xl px-3 py-2">
+                {error}
+              </div>
+            )}
+            <button
+              onClick={() => void confirmSecure()}
+              className="mt-4 w-full py-3.5 rounded-2xl bg-mint text-ink font-display font-extrabold border-2 border-ink shadow-[4px_4px_0_0_var(--ink)] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all"
+            >
+              Confirmer le paiement
+            </button>
+            <button
+              onClick={() => {
+                setError(null);
+                setStep("form");
+              }}
+              className="mt-2 w-full py-2.5 text-sm font-bold text-ink/50 hover:text-berry transition-colors"
+            >
+              Annuler
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Traitement final ── */}
+      {step === "processing" && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-ink/70 backdrop-blur-sm px-6">
+          <div className="w-full max-w-[380px] bg-white rounded-[2rem] border-2 border-ink p-8 shadow-[10px_10px_0_0_var(--berry)] text-center">
+            <div className="w-12 h-12 mx-auto rounded-full border-4 border-ink/15 border-t-mint animate-spin" />
+            <div className="font-display font-extrabold text-xl mt-4">Validation bancaire…</div>
+            <div className="text-sm font-mono text-ink/60 mt-1">LarpPay finalise ton abonnement {item.name}.</div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

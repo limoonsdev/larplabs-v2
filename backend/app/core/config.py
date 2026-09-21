@@ -32,12 +32,12 @@ class Settings(BaseSettings):
 
     # Proxy Pool — scraping multi-sources + vetting
     PROXY_TTL_SECONDS: int = 300      # 5 minutes
-    PROXY_VET_TIMEOUT_SECONDS: int = 6
-    PROXY_VET_WAVE_SIZE: int = 150
+    PROXY_VET_TIMEOUT_SECONDS: int = 5
+    PROXY_VET_WAVE_SIZE: int = 200
     PROXY_TARGET_LIVE: int = 80
     PROXY_FAIL_THRESHOLD: int = 2
-    # Nombre de workers de verification simultanes (demande: 10)
-    PROXY_VET_CONCURRENCY: int = 10
+    # Verifications simultanees (vetting turbo : session partagee + endpoint 204)
+    PROXY_VET_CONCURRENCY: int = 100
     # Enrichissement pays (best-effort, via ip-api batch, max N live)
     PROXY_GEO_ENABLED: bool = True
     PROXY_GEO_MAX: int = 100
