@@ -118,12 +118,74 @@ const PATHS: Record<string, React.ReactNode> = {
       <path d="M10.5 11.5v5l4.5-2.5z" fill="currentColor" />
     </>
   ),
+  rumble: (
+    <text
+      x="12"
+      y="17.5"
+      textAnchor="middle"
+      fontSize="15"
+      fontWeight="900"
+      fontStyle="italic"
+      fill="currentColor"
+      fontFamily="Arial, sans-serif"
+    >
+      R
+    </text>
+  ),
+  dailymotion: (
+    <>
+      <circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" strokeWidth="2" />
+      <path d="M10 8.5v7l6-3.5z" fill="currentColor" />
+    </>
+  ),
+  pinterest: (
+    <text
+      x="12"
+      y="18"
+      textAnchor="middle"
+      fontSize="16"
+      fontWeight="900"
+      fill="currentColor"
+      fontFamily="Georgia, serif"
+    >
+      P
+    </text>
+  ),
+  linkedin: (
+    <text
+      x="12"
+      y="17"
+      textAnchor="middle"
+      fontSize="11"
+      fontWeight="900"
+      fill="currentColor"
+      fontFamily="Arial, sans-serif"
+    >
+      in
+    </text>
+  ),
+  telegram: (
+    <path
+      d="M21 4L3 11.2l6.3 2.4L11.5 20l3.9-4.5 5.3 1.6z"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinejoin="round"
+    />
+  ),
+  steam: (
+    <>
+      <circle cx="9" cy="14" r="5.5" fill="none" stroke="currentColor" strokeWidth="2" />
+      <circle cx="9" cy="14" r="1.6" fill="currentColor" />
+      <path d="M13 10.5L19 5m0 0h-3.5M19 5v3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </>
+  ),
 };
 
 export function PlatformLogo({ id, className = "w-5 h-5" }: { id: string; className?: string }) {
   return (
     <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
-      {PATHS[id] ?? PATHS.video}
+      {PATHS[id] ?? PATHS["video"]}
     </svg>
   );
 }

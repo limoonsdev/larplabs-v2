@@ -44,7 +44,7 @@ class Action(BaseModel):
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Touches clavier → nodriver key codes
+# Touches clavier -> nodriver key codes
 # ──────────────────────────────────────────────────────────────────────────────
 
 KEY_MAP = {

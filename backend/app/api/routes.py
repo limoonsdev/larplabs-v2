@@ -10,9 +10,10 @@ import time
 from typing import Any, Dict, List, Optional
 
 import aiohttp
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
+from app.api.auth import PLAN_LIMITS, require_user
 from app.core.config import settings
 from app.core.proxy_pool import proxy_pool
 from app.workers.actions import Action
@@ -53,7 +54,7 @@ class ProbeRequest(BaseModel):
 # ──────────────────────────────────────────────────────────────────────────────
 
 @router.post("/session/start", summary="Démarrer une session de workers")
-async def start_session(body: StartSessionRequest) -> Dict:
+async def start_session(body: StartSessionRequest, request: Request) -> Dict:
     """
     Lance N workers Chrome qui vont visiter l'URL et exécuter les actions configurées.
     Retourne un `session_id` pour gérer la session.
@@ -73,9 +74,13 @@ async def start_session(body: StartSessionRequest) -> Dict:
     ```
     """
     try:
+        user = require_user(request)
+        cap = PLAN_LIMITS.get(user.get("plan", "starter"), 50)
+        workers = max(1, min(body.num_workers, cap))
+        capped = workers < body.num_workers
         config = SessionConfig(
             url=body.url,
-            num_workers=body.num_workers,
+            num_workers=workers,
             use_proxies=body.use_proxies,
             actions=body.actions,
             repeat=body.repeat,
@@ -85,13 +90,16 @@ async def start_session(body: StartSessionRequest) -> Dict:
             solve_captcha=body.solve_captcha,
         )
         session_id = await worker_pool.start_session(config)
-        logger.info(f"Session démarrée: {session_id} ({body.num_workers} workers → {body.url})")
+        logger.info(f"Session démarrée: {session_id} ({workers} workers -> {body.url}) [{user.get('plan')}]")
         return {
             "ok": True,
             "session_id": session_id,
-            "num_workers": body.num_workers,
+            "num_workers": workers,
             "url": body.url,
-            "message": f"{body.num_workers} workers lancés vers {body.url}",
+            "plan": user.get("plan", "starter"),
+            "capped": capped,
+            "message": f"{workers} workers lancés vers {body.url}"
+            + (f" (limite plan {user.get('plan')})" if capped else ""),
         }
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

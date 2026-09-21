@@ -3,7 +3,7 @@
  * Communique avec le backend Python FastAPI sur localhost:8000
  */
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL ?? "http://localhost:8000";
+const BACKEND_URL = import.meta.env["VITE_BACKEND_URL"] ?? "http://localhost:8000";
 const WS_URL = BACKEND_URL.replace(/^http/, "ws") + "/ws/panel";
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -102,6 +102,38 @@ export type ProxyStats = {
   refreshed_at: number | null;
 };
 
+export type AuthUser = { email: string; plan: string };
+
+export type Plan = { id: string; name: string; price: string; workers: number; free: boolean };
+
+export type LibraryPreset = {
+  id: string;
+  name: string;
+  platform: string;
+  url: string;
+  num_workers: number;
+  think_time_ms: number;
+  use_proxies: boolean;
+  repeat: boolean;
+  solve_captcha: boolean;
+  actions: Action[];
+  uses: number;
+  created_at: number;
+};
+
+export type ChatPreset = {
+  id: string;
+  name: string;
+  platform: string;
+  url: string;
+  num_workers: number;
+  think_time_ms: number;
+  use_proxies: boolean;
+  repeat: boolean;
+  solve_captcha: boolean;
+  actions: Action[];
+};
+
 export type WsMessage =
   | { type: "CONNECTED"; data: { message: string; timestamp: number } }
   | { type: "STATS_UPDATE"; data: GlobalStats; ts: number }
@@ -117,15 +149,49 @@ export type WsMessage =
 // ──────────────────────────────────────────────────────────────────────────────
 
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
+  const token = getToken();
   const res = await fetch(`${BACKEND_URL}${path}`, {
-    headers: { "Content-Type": "application/json", ...options?.headers },
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...options?.headers,
+    },
     ...options,
   });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error((err as { detail?: string }).detail ?? res.statusText);
+  if (res.ok) return res.json() as Promise<T>;
+  if (res.status === 401) {
+    // Session expirée : nettoie et signale pour redirection login
+    clearToken();
+    window.dispatchEvent(new CustomEvent("larp:unauthorized"));
   }
-  return res.json() as Promise<T>;
+  const err = await res.json().catch(() => ({ detail: res.statusText }));
+  throw new Error((err as { detail?: string }).detail ?? res.statusText);
+}
+
+const TOKEN_KEY = "larplabs_token";
+
+export function getToken(): string | null {
+  try {
+    return localStorage.getItem(TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function setToken(token: string) {
+  try {
+    localStorage.setItem(TOKEN_KEY, token);
+  } catch {
+    // ignore
+  }
+}
+
+export function clearToken() {
+  try {
+    localStorage.removeItem(TOKEN_KEY);
+  } catch {
+    // ignore
+  }
 }
 
 export const backendApi = {
@@ -134,7 +200,7 @@ export const backendApi = {
 
   // ── Session ────────────────────────────────────────────────────────────────
   startSession: (config: SessionConfig) =>
-    apiFetch<{ ok: boolean; session_id: string; num_workers: number; url: string }>(
+    apiFetch<{ ok: boolean; session_id: string; num_workers: number; url: string; plan?: string; capped?: boolean; message?: string }>(
       "/api/session/start",
       { method: "POST", body: JSON.stringify(config) }
     ),
@@ -163,7 +229,47 @@ export const backendApi = {
 
   // ── Captcha ────────────────────────────────────────────────────────────────
   captchaStatus: () =>
-    apiFetch<{ ok: boolean; resolver: boolean; ocr: boolean; handles: string[] }>("/api/captcha/status"),
+    apiFetch<{ ok: boolean; resolver: boolean; ocr: boolean; ai?: boolean; model?: string; handles: string[] }>("/api/captcha/status"),
+
+  // ── Auth ───────────────────────────────────────────────────────────────────
+  register: (email: string, password: string) =>
+    apiFetch<{ ok: boolean; token: string; user: AuthUser }>("/api/auth/register", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    }),
+
+  login: (email: string, password: string) =>
+    apiFetch<{ ok: boolean; token: string; user: AuthUser }>("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    }),
+
+  me: () => apiFetch<{ ok: boolean; user: AuthUser }>("/api/auth/me"),
+
+  logout: () => apiFetch<{ ok: boolean }>("/api/auth/logout", { method: "POST", body: "{}" }),
+
+  plans: () => apiFetch<{ ok: boolean; plans: Plan[]; limits: Record<string, number> }>("/api/plans"),
+
+  // ── Bibliothèque presets ───────────────────────────────────────────────────
+  libraryList: () => apiFetch<{ ok: boolean; presets: LibraryPreset[] }>("/api/presets/library"),
+
+  librarySave: (preset: Omit<LibraryPreset, "id" | "uses" | "created_at">) =>
+    apiFetch<{ ok: boolean; preset: LibraryPreset }>("/api/presets/library", {
+      method: "POST",
+      body: JSON.stringify(preset),
+    }),
+
+  libraryDelete: (id: string) =>
+    apiFetch<{ ok: boolean }>(`/api/presets/library/${id}`, { method: "DELETE" }),
+
+  // ── LarpBot ────────────────────────────────────────────────────────────────
+  larpbotStatus: () => apiFetch<{ ok: boolean; ai: boolean; model: string }>("/api/larpbot/status"),
+
+  larpbotChat: (messages: { role: "user" | "assistant"; content: string }[]) =>
+    apiFetch<{ ok: boolean; reply: string; preset: ChatPreset | null }>("/api/larpbot/chat", {
+      method: "POST",
+      body: JSON.stringify({ messages }),
+    }),
 
   // ── Workers ────────────────────────────────────────────────────────────────
   getWorkers: () =>

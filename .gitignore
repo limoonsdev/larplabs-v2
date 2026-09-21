@@ -12,6 +12,10 @@ __pycache__/
 .venv/
 backend/.venv/
 
+# SQLite locale (dev) — la prod utilise le volume Docker
+backend/data/
+*.db
+
 # Env (jamais commité)
 .env
 backend/.env

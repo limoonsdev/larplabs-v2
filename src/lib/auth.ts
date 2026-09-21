@@ -1,15 +1,14 @@
 /**
- * LarpLabs V2 — fausse authentification locale (démo).
- * Stocke la session dans localStorage, sans backend.
+ * LarpLabs V2 — session locale (token + user cachés).
+ * L'auth réelle est côté backend SQLite (/api/auth/*).
  */
+import type { AuthUser } from "./backend-api";
 
-const KEY = "larplabs_auth";
+const USER_KEY = "larplabs_user";
 
-export type AuthUser = { email: string; at: number };
-
-export function getAuthUser(): AuthUser | null {
+export function getSessionUser(): AuthUser | null {
   try {
-    const raw = localStorage.getItem(KEY);
+    const raw = localStorage.getItem(USER_KEY);
     if (!raw) return null;
     return JSON.parse(raw) as AuthUser;
   } catch {
@@ -17,19 +16,19 @@ export function getAuthUser(): AuthUser | null {
   }
 }
 
-export function login(email: string): AuthUser {
-  const user = { email, at: Date.now() };
+export function setSession(token: string, user: AuthUser) {
   try {
-    localStorage.setItem(KEY, JSON.stringify(user));
+    localStorage.setItem("larplabs_token", token);
+    localStorage.setItem(USER_KEY, JSON.stringify(user));
   } catch {
-    // stockage indisponible, on continue quand même
+    // stockage indisponible
   }
-  return user;
 }
 
-export function logout() {
+export function clearSession() {
   try {
-    localStorage.removeItem(KEY);
+    localStorage.removeItem("larplabs_token");
+    localStorage.removeItem(USER_KEY);
   } catch {
     // ignore
   }

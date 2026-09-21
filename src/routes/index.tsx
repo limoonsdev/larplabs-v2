@@ -1,10 +1,15 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { PLATFORM_PRESETS } from "@/lib/presets";
 import { PlatformLogo } from "@/components/platform-logos";
+import { LarpBot } from "@/components/larpbot";
 
 export const Route = createFileRoute("/")({
   component: Home,
 });
+
+function go(id: string) {
+  document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
 
 const FEATURES = [
   {
@@ -12,7 +17,7 @@ const FEATURES = [
     bg: "bg-berry",
     fg: "text-white",
     title: "Proxies multi-sources",
-    text: "28 sources GitHub + APIs publiques aspirées en continu, dédupliquées et mélangées.",
+    text: "78 sources GitHub + APIs publiques aspirées en continu, dédupliquées et mélangées.",
   },
   {
     icon: "⚡",
@@ -39,8 +44,8 @@ const FEATURES = [
     icon: "🎯",
     bg: "bg-ink",
     fg: "text-cream",
-    title: "12 presets plateformes",
-    text: "YouTube, TikTok, Twitch, X, Spotify… 1 clic = URL + workers + actions optimisés.",
+    title: `${PLATFORM_PRESETS.length} presets plateformes`,
+    text: "YouTube, TikTok, Twitch, X, Spotify, Rumble… 1 clic = URL + workers + actions optimisés.",
   },
   {
     icon: "🛡️",
@@ -123,9 +128,9 @@ function Home() {
             </div>
           </div>
           <nav className="hidden md:flex items-center gap-6 text-sm font-bold">
-            <a href="#plateformes" className="hover:text-berry transition-colors">Plateformes</a>
-            <a href="#features" className="hover:text-berry transition-colors">Fonctionnalités</a>
-            <a href="#tarifs" className="hover:text-berry transition-colors">Tarifs</a>
+            <button onClick={() => go("plateformes")} className="hover:text-berry transition-colors">Plateformes</button>
+            <button onClick={() => go("features")} className="hover:text-berry transition-colors">Fonctionnalités</button>
+            <button onClick={() => go("tarifs")} className="hover:text-berry transition-colors">Tarifs</button>
           </nav>
           <div className="flex items-center gap-2">
             <Link
@@ -167,15 +172,15 @@ function Home() {
           >
             Lancer une session →
           </Link>
-          <a
-            href="#tarifs"
+          <button
+            onClick={() => go("tarifs")}
             className="px-8 py-4 rounded-2xl bg-white font-display font-extrabold text-lg border-2 border-ink shadow-[5px_5px_0_0_var(--ink)] hover:bg-lemon active:translate-x-[2px] active:translate-y-[2px] active:shadow-[3px_3px_0_0_var(--ink)] transition-all"
           >
             Voir les tarifs
-          </a>
+          </button>
         </div>
         <div className="flex items-center justify-center gap-2 mt-8 flex-wrap font-mono text-xs">
-          {["1500 workers max", "28 sources proxy", "10 vérifs simultanées", "12 presets"].map((s) => (
+          {["1500 workers max", "78 sources proxy", "10 vérifs simultanées", `${PLATFORM_PRESETS.length} presets`].map((s) => (
             <span key={s} className="px-3 py-1.5 rounded-full bg-white border-2 border-ink/15">
               {s}
             </span>
@@ -184,12 +189,12 @@ function Home() {
       </section>
 
       {/* ── Plateformes ── */}
-      <section id="plateformes" className="max-w-[1200px] mx-auto px-6 py-10">
+      <section id="plateformes" className="max-w-[1200px] mx-auto px-6 py-10 scroll-mt-24">
         <div className="bg-ink text-cream rounded-[2rem] border-2 border-ink p-8">
           <div className="text-[11px] uppercase tracking-[0.16em] text-cream/50 font-bold mb-1">
             Presets prêts en 1 clic
           </div>
-          <h2 className="font-display font-extrabold text-3xl mb-6">12 plateformes supportées</h2>
+          <h2 className="font-display font-extrabold text-3xl mb-6">{PLATFORM_PRESETS.length} plateformes supportées</h2>
           <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
             {PLATFORM_PRESETS.map((p) => (
               <div
@@ -208,7 +213,7 @@ function Home() {
       </section>
 
       {/* ── Features ── */}
-      <section id="features" className="max-w-[1200px] mx-auto px-6 py-10">
+      <section id="features" className="max-w-[1200px] mx-auto px-6 py-10 scroll-mt-24">
         <h2 className="font-display font-extrabold text-4xl text-center mb-2">Tout est inclus</h2>
         <p className="text-center text-ink/55 mb-8">Le moteur, les proxies, les presets, l'anti-captcha. Rien à brancher.</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -226,7 +231,7 @@ function Home() {
       </section>
 
       {/* ── Tarifs ── */}
-      <section id="tarifs" className="max-w-[1200px] mx-auto px-6 py-10">
+      <section id="tarifs" className="max-w-[1200px] mx-auto px-6 py-10 scroll-mt-24">
         <h2 className="font-display font-extrabold text-4xl text-center mb-2">3 plans simples</h2>
         <p className="text-center text-ink/55 mb-1">Plans fictifs — démo, aucun paiement.</p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8 items-stretch">
@@ -289,9 +294,10 @@ function Home() {
           </div>
         </div>
         <footer className="text-center text-xs font-mono text-ink/40 py-10">
-          LarpLabs V2 — démo fictive. Aucun paiement, aucun compte réel.
+          LarpLabs V2 — Starter gratuit inclus, plans Pro/Max fictifs pour la démo.
         </footer>
       </section>
+      <LarpBot />
     </div>
   );
 }

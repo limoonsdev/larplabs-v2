@@ -202,6 +202,52 @@ async def _try_ocr_fill(tab: Any) -> bool:
         return False
 
 
+async def ai_suggest(kind: str, title: str, url: str) -> Optional[Dict]:
+    """
+    Demande a l'IA (Groq) la prochaine action contre un challenge persistant.
+    Retourne {"action": "click"|"wait"|"reload", "selector"?, "wait_s"?} ou None.
+    Best-effort : None si IA non configuree ou erreur.
+    """
+    try:
+        from app.core.ai import groq_chat, is_configured
+        if not is_configured():
+            return None
+        import json
+
+        prompt = (
+            "Tu es un expert anti-bot. Un navigateur automatise est bloque par un challenge.\n"
+            f"Type detecte : {kind}\nTitre de page : {title[:120]}\nURL : {url[:200]}\n\n"
+            "Reponds UNIQUEMENT avec un JSON valide, sans markdown, parmi :\n"
+            '{"action":"click","selector":"selecteur CSS probable du bouton/checkbox"}\n'
+            '{"action":"wait","wait_s":8}\n'
+            '{"action":"reload"}\n'
+            "Pour cloudflare/turnstile : click sur .cf-turnstile ou wait. "
+            "Pour recaptcha/hcaptcha : wait (l'OCR a deja echoue)."
+        )
+        raw = await groq_chat(
+            [{"role": "user", "content": prompt}], temperature=0.2, max_tokens=150
+        )
+        start, end = raw.find("{"), raw.rfind("}")
+        if start < 0 or end <= start:
+            return None
+        data = json.loads(raw[start:end + 1])
+        if data.get("action") not in ("click", "wait", "reload"):
+            return None
+        return data
+    except Exception as e:
+        logger.debug(f"captcha: ai_suggest error: {e}")
+        return None
+
+
+async def _page_info(tab: Any) -> Dict[str, str]:
+    try:
+        title = await _eval(tab, "document.title") or ""
+        url = await _eval(tab, "location.href") or ""
+        return {"title": str(title), "url": str(url)}
+    except Exception:
+        return {"title": "", "url": ""}
+
+
 async def solve_challenge(tab: Any, timeout_s: int = 20) -> Dict:
     """
     Boucle de resolution auto. Retourne un dict :
@@ -251,6 +297,34 @@ async def solve_challenge(tab: Any, timeout_s: int = 20) -> Dict:
             except Exception as e:
                 logger.debug(f"captcha: ocr-fill error: {e}")
 
+        # 3b) Assistance IA (Groq) si challenge persistant
+        try:
+            from app.core.ai import is_configured
+            if is_configured():
+                info = await _page_info(tab)
+                sug = await ai_suggest(kind, info["title"], info["url"])
+                if sug:
+                    out["method"] = out["method"] + "+ai"
+                    act = sug.get("action")
+                    if act == "click" and sug.get("selector"):
+                        sel = str(sug["selector"])[:200].replace("`", "")
+                        await _eval(
+                            tab,
+                            f"(function(){{try{{var el=document.querySelector({repr(sel)});"
+                            "if(el){el.click();return true;}}catch(e){}return false;}})()",
+                        )
+                        await asyncio.sleep(4.0)
+                    elif act == "wait":
+                        await asyncio.sleep(min(15.0, float(sug.get("wait_s", 8))))
+                    elif act == "reload":
+                        await _eval(tab, "location.reload()")
+                        await asyncio.sleep(4.0)
+                    if not await detect_challenge(tab):
+                        out.update({"solved": True})
+                        return out
+        except Exception as e:
+            logger.debug(f"captcha: ai-assist error: {e}")
+
         # 4) Reload doux : certains challenges passent au 2e chargement
         try:
             await _eval(tab, "location.reload()")
@@ -267,8 +341,15 @@ async def solve_challenge(tab: Any, timeout_s: int = 20) -> Dict:
 
 async def captcha_status() -> Dict:
     """Etat du resolver pour l'API / le panel."""
+    try:
+        from app.core.ai import get_model, is_configured
+        ai, model = is_configured(), get_model()
+    except Exception:
+        ai, model = False, None
     return {
         "resolver": True,
         "ocr": ocr_available(),
+        "ai": ai,
+        "model": model,
         "handles": ["cloudflare", "turnstile", "recaptcha", "hcaptcha", "image-captcha"],
     }

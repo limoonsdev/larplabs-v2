@@ -181,7 +181,7 @@ class WorkerPool:
         self._sessions[session_id] = session
 
         logger.info(
-            f"session {session_id}: starting {config.num_workers} workers → {config.url}"
+            f"session {session_id}: starting {config.num_workers} workers -> {config.url}"
         )
 
         # Lancer le vetting des proxies en background si nécessaire

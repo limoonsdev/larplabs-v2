@@ -293,7 +293,7 @@ class ProxyPool:
                 else:
                     text = await resp.text()
                     out = self._parse_txt(text, spec.get("kind", "http"), name)
-                logger.info(f"proxy: {name} → {len(out)} entries")
+                logger.info(f"proxy: {name} -> {len(out)} entries")
                 return out
         except Exception as e:
             logger.warning(f"proxy: failed to fetch {name}: {e}")

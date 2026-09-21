@@ -1,11 +1,16 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   backendApi,
+  clearToken,
   connectBackendWs,
+  getToken,
   type Action,
   type ActionType,
+  type AuthUser,
+  type ChatPreset,
   type GlobalStats,
+  type LibraryPreset,
   type LogEntry,
   type ProxyStats,
   type SessionConfig,
@@ -13,6 +18,8 @@ import {
 } from "@/lib/backend-api";
 import { PLATFORM_PRESETS } from "@/lib/presets";
 import { PlatformLogo } from "@/components/platform-logos";
+import { LarpBot } from "@/components/larpbot";
+import { clearSession, getSessionUser } from "@/lib/auth";
 
 export const Route = createFileRoute("/backend")({
   component: BackendPanel,
@@ -81,6 +88,7 @@ function ActionBuilder({
   onRemove: (idx: number) => void;
 }) {
   const upd = (patch: Partial<Action>) => onUpdate(index, { ...action, ...patch });
+  const atype: string = action.type;
   return (
     <div className="bg-cream border-2 border-ink/30 rounded-2xl p-4 flex flex-col gap-3">
       <div className="flex items-center justify-between gap-2">
@@ -121,11 +129,11 @@ function ActionBuilder({
           value={action.value ?? ""}
           onChange={(e) => upd({ value: e.target.value })}
           placeholder={
-            action.type === "key_press"
+            atype === "key_press"
               ? "Touche (Enter, Tab, Escape, F5...)"
-              : action.type === "navigate"
+              : atype === "navigate"
               ? "URL cible"
-              : action.type === "scroll"
+              : atype === "scroll"
               ? "Direction (up, down, top, bottom)"
               : "Texte à saisir"
           }
@@ -222,6 +230,13 @@ function BackendPanel() {
   const [actions, setActions] = useState<Action[]>([]);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [activePreset, setActivePreset] = useState<string | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(getSessionUser());
+  const [authed, setAuthed] = useState<boolean | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [library, setLibrary] = useState<LibraryPreset[]>([]);
+  const [libraryName, setLibraryName] = useState("");
+  const [cappedMsg, setCappedMsg] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   // ── Probe ─────────────────────────────────────────────────────────────────
   const [probeState, setProbeState] = useState<"idle" | "probing" | "ok" | "fail">("idle");
@@ -323,8 +338,14 @@ function BackendPanel() {
       const r = await backendApi.startSession(config);
       setSessionId(r.session_id);
       setRunning(true);
+      setCappedMsg(r.capped ? (r.message ?? "Limite de ton plan appliquée.") : null);
     } catch (e) {
-      alert("Erreur au démarrage : " + String(e));
+      const msg = String(e instanceof Error ? e.message : e);
+      if (msg.includes("401") || msg.toLowerCase().includes("connexion requise")) {
+        setAuthed(false);
+      } else {
+        alert("Erreur au démarrage : " + msg);
+      }
     }
   };
 
@@ -368,7 +389,158 @@ function BackendPanel() {
     setRepeat(p.repeat);
     setThinkTimeMs(p.think_time_ms);
     setActions(p.actions);
+    setCappedMsg(null);
   };
+
+  // ── Applique un preset complet (bibliothèque / LarpBot) ──────────────────
+  const applyFullPreset = useCallback((p: LibraryPreset | ChatPreset) => {
+    setActivePreset(null);
+    setUrl(p.url);
+    setNumWorkers(p.num_workers);
+    setUseProxies(p.use_proxies);
+    setRepeat(p.repeat);
+    setThinkTimeMs(p.think_time_ms);
+    setSolveCaptcha(p.solve_captcha);
+    setActions(p.actions as Action[]);
+    setCappedMsg(null);
+  }, []);
+
+  // ── Bibliothèque ──────────────────────────────────────────────────────────
+  const refreshLibrary = useCallback(async () => {
+    if (!getToken()) return;
+    try {
+      const r = await backendApi.libraryList();
+      setLibrary(r.presets);
+    } catch {
+      // non bloquant
+    }
+  }, []);
+
+  const saveCurrentAsPreset = async () => {
+    const name = libraryName.trim();
+    if (!name) return;
+    try {
+      await backendApi.librarySave({
+        name,
+        platform: activePreset ?? "custom",
+        url,
+        num_workers: numWorkers,
+        think_time_ms: thinkTimeMs,
+        use_proxies: useProxies,
+        repeat,
+        solve_captcha: solveCaptcha,
+        actions,
+      });
+      setLibraryName("");
+      await refreshLibrary();
+    } catch (e) {
+      alert("Sauvegarde impossible : " + String(e instanceof Error ? e.message : e));
+    }
+  };
+
+  const logout = async () => {
+    try {
+      await backendApi.logout();
+    } catch {
+      // ignore
+    }
+    clearToken();
+    clearSession();
+    setUser(null);
+    setAuthed(false);
+    await navigate({ to: "/login" });
+  };
+
+  const planBadge =
+    user?.plan === "max"
+      ? "bg-berry text-white"
+      : user?.plan === "pro"
+        ? "bg-lemon text-ink"
+        : "bg-mint text-ink";
+
+  // ── Auth guard : sans compte, pas de panel ────────────────────────────────
+  useEffect(() => {
+    if (!getToken()) {
+      setAuthed(false);
+      return;
+    }
+    backendApi
+      .me()
+      .then((r) => {
+        setUser(r.user);
+        setAuthed(true);
+      })
+      .catch(() => {
+        clearToken();
+        clearSession();
+        setAuthed(false);
+      });
+  }, []);
+
+  // ── Bibliothèque + presets du LarpBot ────────────────────────────────────
+  useEffect(() => {
+    if (!authed) return;
+    void refreshLibrary();
+    // Preset en attente (créé depuis la home)
+    try {
+      const raw = sessionStorage.getItem("larp_pending_preset");
+      if (raw) {
+        sessionStorage.removeItem("larp_pending_preset");
+        applyFullPreset(JSON.parse(raw) as ChatPreset);
+      }
+    } catch {
+      // ignore
+    }
+    const onApply = (e: Event) => applyFullPreset((e as CustomEvent<ChatPreset>).detail);
+    const onLib = () => void refreshLibrary();
+    window.addEventListener("larp:apply-preset", onApply);
+    window.addEventListener("larp:library-updated", onLib);
+    return () => {
+      window.removeEventListener("larp:apply-preset", onApply);
+      window.removeEventListener("larp:library-updated", onLib);
+    };
+  }, [authed, refreshLibrary, applyFullPreset]);
+
+  // Chargement session
+  if (authed === null) {
+    return (
+      <div className="min-h-screen bg-cream text-ink font-sans grid place-items-center">
+        <div className="font-mono text-sm text-ink/50 animate-pulse">Vérification de session…</div>
+      </div>
+    );
+  }
+
+  // 🔒 Sans compte, pas de panel
+  if (authed === false) {
+    return (
+      <div className="min-h-screen bg-cream text-ink font-sans grid place-items-center px-6">
+        <div className="w-full max-w-[420px] bg-white rounded-[2rem] border-2 border-ink p-8 shadow-[10px_10px_0_0_var(--ink)] text-center">
+          <div className="w-14 h-14 mx-auto rounded-2xl bg-ink text-cream grid place-items-center text-2xl font-display font-extrabold">
+            🔒
+          </div>
+          <h1 className="font-display font-extrabold text-3xl mt-4">Connexion requise</h1>
+          <p className="text-sm text-ink/55 mt-2">
+            Le panel LarpLabs V2 est réservé aux membres. L'inscription offre le plan{" "}
+            <b>Starter gratuit</b>.
+          </p>
+          <div className="flex flex-col gap-2 mt-6">
+            <Link
+              to="/login"
+              className="w-full py-3.5 rounded-2xl bg-mint text-ink font-display font-extrabold border-2 border-ink shadow-[5px_5px_0_0_var(--ink)] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all"
+            >
+              Se connecter →
+            </Link>
+            <Link
+              to="/"
+              className="w-full py-3 rounded-2xl border-2 border-ink/20 font-bold text-sm hover:bg-lemon transition-colors"
+            >
+              Retour à l'accueil
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-cream text-ink font-sans">
@@ -411,6 +583,54 @@ function BackendPanel() {
                     : "Backend en ligne (WS...)"
                   : "Backend hors ligne"}
               </span>
+            </div>
+            <Link
+              to="/"
+              className="hidden md:block px-3 py-1.5 rounded-xl border-2 border-ink/20 text-xs font-bold hover:bg-lemon transition-colors"
+            >
+              🏠 Accueil
+            </Link>
+            {/* User + plan + paramètres */}
+            <div className="relative">
+              <button
+                onClick={() => setMenuOpen((o) => !o)}
+                className="flex items-center gap-2 pl-1.5 pr-3 py-1.5 rounded-2xl border-2 border-ink bg-white hover:bg-lemon transition-colors"
+              >
+                <span className="w-8 h-8 rounded-xl bg-ink text-cream grid place-items-center text-sm font-display font-extrabold uppercase">
+                  {(user?.email ?? "?").slice(0, 1)}
+                </span>
+                <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full uppercase ${planBadge}`}>
+                  {user?.plan ?? "starter"}
+                </span>
+                <span className="text-xs">▾</span>
+              </button>
+              {menuOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
+                  <div className="absolute right-0 mt-2 w-64 z-50 bg-white rounded-2xl border-2 border-ink shadow-[6px_6px_0_0_var(--ink)] overflow-hidden">
+                    <div className="px-4 py-3 border-b-2 border-ink/10">
+                      <div className="text-[10px] uppercase tracking-wider text-ink/40 font-bold">Connecté</div>
+                      <div className="text-sm font-bold truncate">{user?.email}</div>
+                      <div className="text-[11px] font-mono text-ink/50 mt-0.5">
+                        Plan <b className="uppercase">{user?.plan}</b> · {user?.plan === "starter" ? "50" : user?.plan === "pro" ? "500" : "1500"} workers max
+                      </div>
+                    </div>
+                    <Link
+                      to="/"
+                      className="block px-4 py-2.5 text-sm font-bold hover:bg-lemon transition-colors"
+                      onClick={() => setMenuOpen(false)}
+                    >
+                      💎 Changer de plan
+                    </Link>
+                    <button
+                      onClick={() => void logout()}
+                      className="block w-full text-left px-4 py-2.5 text-sm font-bold text-berry hover:bg-berry/10 transition-colors"
+                    >
+                      ⏻ Déconnexion
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -466,6 +686,63 @@ function BackendPanel() {
                 ✅ {PLATFORM_PRESETS.find((x) => x.id === activePreset)?.description}
               </p>
             )}
+          </div>
+
+          {/* Bibliothèque (LarpBot + sauvegardes) */}
+          <div className="bg-white rounded-[2rem] border-2 border-ink p-6 shadow-[10px_10px_0_0_var(--ink)]">
+            <h2 className="font-display font-extrabold text-2xl leading-none mb-1">
+              Bibliothèque 📚
+            </h2>
+            <p className="text-sm text-ink/55 mb-4">
+              Tes presets + ceux construits par LarpBot.
+            </p>
+            <div className="flex gap-2 mb-3">
+              <input
+                value={libraryName}
+                onChange={(e) => setLibraryName(e.target.value)}
+                placeholder="Nom du preset…"
+                disabled={running}
+                className="flex-1 bg-cream border-2 border-ink/20 rounded-xl px-3 py-2 text-sm outline-none focus:border-ink"
+              />
+              <button
+                onClick={() => void saveCurrentAsPreset()}
+                disabled={running || !libraryName.trim()}
+                className="px-3 py-2 rounded-xl bg-ink text-cream text-xs font-bold disabled:opacity-40 hover:bg-berry transition-colors"
+              >
+                💾 Sauver
+              </button>
+            </div>
+            <div className="flex flex-col gap-2 max-h-[220px] overflow-y-auto">
+              {library.length === 0 && (
+                <p className="text-xs font-mono text-ink/40">
+                  Vide pour l'instant — demande à LarpBot 🤖 en bas à droite.
+                </p>
+              )}
+              {library.map((p) => (
+                <div key={p.id} className="flex items-center gap-2 rounded-xl border-2 border-ink/15 bg-cream px-3 py-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-bold truncate">{p.name}</div>
+                    <div className="text-[10px] font-mono text-ink/50 truncate">
+                      {p.platform} · {p.num_workers} w. · {p.actions.length} actions
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => applyFullPreset(p)}
+                    disabled={running}
+                    className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg bg-mint border-2 border-ink disabled:opacity-40"
+                  >
+                    ▶
+                  </button>
+                  <button
+                    onClick={() => void backendApi.libraryDelete(p.id).then(() => void refreshLibrary())}
+                    disabled={running}
+                    className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg bg-berry/10 border-2 border-berry/30 text-berry disabled:opacity-40"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
           </div>
 
           {/* Config card */}
@@ -611,6 +888,11 @@ function BackendPanel() {
               >
                 Démarrer →
               </button>
+            )}
+            {cappedMsg && (
+              <p className="text-[11px] font-mono text-tangerine mt-2 text-center">
+                ⚠️ {cappedMsg}
+              </p>
             )}
           </div>
 
@@ -880,6 +1162,7 @@ function BackendPanel() {
           </div>
         </section>
       </div>
+      <LarpBot />
     </div>
   );
 }

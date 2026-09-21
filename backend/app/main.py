@@ -16,8 +16,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api.routes import router as api_router
+from app.api.auth import router as auth_router
+from app.api.larpbot import router as larpbot_router
 from app.api.websocket import websocket_endpoint, start_broadcast_loop, stop_broadcast_loop, on_worker_event
 from app.core.config import settings
+from app.core.db import init_db
 from app.core.proxy_pool import proxy_pool
 from app.workers.pool import worker_pool
 
@@ -41,12 +44,15 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Démarre les services au startup, les arrête au shutdown."""
-    logger.info("═══════════════════════════════════════════════════")
+    logger.info("===================================================")
     logger.info("  LarpLabs V2 Backend - Démarrage...")
-    logger.info("═══════════════════════════════════════════════════")
+    logger.info("===================================================")
 
     # Enregistrer le callback WebSocket sur le worker pool
     worker_pool.add_callback(on_worker_event)
+
+    # Base SQLite (users, tokens, bibliotheque presets)
+    init_db()
 
     # Démarrer le pull de proxies en background (non-bloquant)
     asyncio.create_task(proxy_pool.get_all(force=True))
@@ -55,11 +61,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Démarrer le broadcast WebSocket
     await start_broadcast_loop()
 
-    logger.info("✓ Proxy pool → pull multi-sources en background")
-    logger.info("✓ WebSocket broadcast loop démarré")
-    logger.info(f"✓ Serveur prêt sur http://{settings.HOST}:{settings.PORT}")
-    logger.info(f"✓ Docs disponibles sur http://{settings.HOST}:{settings.PORT}/docs")
-    logger.info(f"✓ WebSocket panel: ws://{settings.HOST}:{settings.PORT}/ws/panel")
+    logger.info("OK Proxy pool -> pull multi-sources en background")
+    logger.info("OK WebSocket broadcast loop démarré")
+    logger.info(f"OK Serveur prêt sur http://{settings.HOST}:{settings.PORT}")
+    logger.info(f"OK Docs disponibles sur http://{settings.HOST}:{settings.PORT}/docs")
+    logger.info(f"OK WebSocket panel: ws://{settings.HOST}:{settings.PORT}/ws/panel")
 
     yield  # ── Application en cours ──────────────────────────────────────────
 
@@ -70,7 +76,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await worker_pool.stop_all()
     await stop_broadcast_loop()
 
-    logger.info("✓ Shutdown complet.")
+    logger.info("OK Shutdown complet.")
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -102,6 +108,8 @@ app.add_middleware(
 
 # ── REST Routes ───────────────────────────────────────────────────────────────
 app.include_router(api_router)
+app.include_router(auth_router)
+app.include_router(larpbot_router)
 
 
 # ── WebSocket Panel ───────────────────────────────────────────────────────────
@@ -122,9 +130,9 @@ async def ws_panel(websocket: WebSocket) -> None:
       NEW_LOG       – nouveau log en temps réel
 
     Messages envoyés par le client :
-      {"type": "PING"}         → {"type": "PONG"}
-      {"type": "GET_STATS"}    → {"type": "STATS_UPDATE", ...}
-      {"type": "GET_LOGS", "limit": 50} → {"type": "LOGS_UPDATE", ...}
+      {"type": "PING"}         -> {"type": "PONG"}
+      {"type": "GET_STATS"}    -> {"type": "STATS_UPDATE", ...}
+      {"type": "GET_LOGS", "limit": 50} -> {"type": "LOGS_UPDATE", ...}
     """
     await websocket_endpoint(websocket)
 
