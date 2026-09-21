@@ -1,0 +1,25 @@
+# Deps & build
+node_modules/
+.output/
+.tanstack/
+.wrangler/
+dist/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+backend/.venv/
+
+# Env (jamais commité)
+.env
+backend/.env
+!.env.example
+backend/.env.example
+
+# OS / editeurs
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

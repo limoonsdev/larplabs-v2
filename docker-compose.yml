@@ -1,0 +1,28 @@
+# LarpLabs V2 — Stack VPS (web + backend + Chrome + OCR)
+services:
+  backend:
+    build: ./backend
+    container_name: larplabs-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - path: ./backend/.env
+        required: false
+    # Vital pour Chrome : /dev/shm partagé trop petit par défaut
+    shm_size: 2gb
+    environment:
+      - MAX_WORKERS=1500
+      - PROXY_VET_CONCURRENCY=10
+
+  web:
+    build:
+      context: .
+      args:
+        VITE_BACKEND_URL: ${VITE_BACKEND_URL:-http://localhost:8000}
+    container_name: larplabs-web
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend

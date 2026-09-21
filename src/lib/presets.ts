@@ -1,0 +1,246 @@
+/**
+ * LarpLabs V2 — Presets plateformes
+ * Configurations pretes a l'emploi : URL, workers, actions, tempo.
+ */
+import type { Action } from "./backend-api";
+
+export type PlatformPreset = {
+  id: string;
+  name: string;
+  icon: string;
+  color: string;
+  url: string;
+  num_workers: number;
+  think_time_ms: number;
+  use_proxies: boolean;
+  repeat: boolean;
+  description: string;
+  actions: Action[];
+};
+
+const wait = (delay_ms: number): Action => ({ type: "wait", delay_ms });
+const scrollDown = (count = 3, delay_ms = 400): Action => ({
+  type: "scroll",
+  value: "down",
+  count,
+  delay_ms,
+});
+
+export const PLATFORM_PRESETS: PlatformPreset[] = [
+  {
+    id: "youtube",
+    name: "YouTube",
+    icon: "▶️",
+    color: "bg-red-500",
+    url: "https://www.youtube.com/",
+    num_workers: 100,
+    think_time_ms: 2500,
+    use_proxies: true,
+    repeat: true,
+    description: "Watch + scroll recommandations",
+    actions: [
+      wait(3000),
+      scrollDown(4, 600),
+      { type: "click", selector: "ytd-thumbnail a#thumbnail", count: 1, delay_ms: 500 },
+      wait(8000),
+      scrollDown(3, 800),
+    ],
+  },
+  {
+    id: "tiktok",
+    name: "TikTok",
+    icon: "🎵",
+    color: "bg-black",
+    url: "https://www.tiktok.com/",
+    num_workers: 120,
+    think_time_ms: 1800,
+    use_proxies: true,
+    repeat: true,
+    description: "Feed vertical infini",
+    actions: [
+      wait(2500),
+      scrollDown(6, 900),
+      { type: "click", selector: "button[data-e2e='like-button']", count: 1, delay_ms: 300 },
+      wait(4000),
+      scrollDown(6, 900),
+    ],
+  },
+  {
+    id: "instagram",
+    name: "Instagram",
+    icon: "📸",
+    color: "bg-pink-500",
+    url: "https://www.instagram.com/",
+    num_workers: 80,
+    think_time_ms: 2200,
+    use_proxies: true,
+    repeat: true,
+    description: "Feed + stories + likes",
+    actions: [
+      wait(2500),
+      scrollDown(5, 700),
+      { type: "click", selector: "svg[aria-label='Like']", count: 2, delay_ms: 800 },
+      wait(2000),
+      scrollDown(5, 700),
+    ],
+  },
+  {
+    id: "twitch",
+    name: "Twitch",
+    icon: "💜",
+    color: "bg-purple-600",
+    url: "https://www.twitch.tv/",
+    num_workers: 150,
+    think_time_ms: 5000,
+    use_proxies: true,
+    repeat: true,
+    description: "Viewer longue session live",
+    actions: [
+      wait(5000),
+      scrollDown(2, 1000),
+      wait(15000),
+      scrollDown(2, 1000),
+      wait(15000),
+    ],
+  },
+  {
+    id: "x",
+    name: "X / Twitter",
+    icon: "𝕏",
+    color: "bg-sky-500",
+    url: "https://x.com/",
+    num_workers: 100,
+    think_time_ms: 2000,
+    use_proxies: true,
+    repeat: true,
+    description: "Timeline + engagement",
+    actions: [
+      wait(2000),
+      scrollDown(5, 600),
+      { type: "click", selector: "div[data-testid='like']", count: 2, delay_ms: 700 },
+      wait(1500),
+      scrollDown(5, 600),
+    ],
+  },
+  {
+    id: "facebook",
+    name: "Facebook",
+    icon: "👍",
+    color: "bg-blue-600",
+    url: "https://www.facebook.com/",
+    num_workers: 80,
+    think_time_ms: 2500,
+    use_proxies: true,
+    repeat: true,
+    description: "Feed + reels",
+    actions: [
+      wait(2500),
+      scrollDown(5, 700),
+      wait(3000),
+      scrollDown(5, 700),
+    ],
+  },
+  {
+    id: "kick",
+    name: "Kick",
+    icon: "🟢",
+    color: "bg-green-500",
+    url: "https://kick.com/",
+    num_workers: 150,
+    think_time_ms: 5000,
+    use_proxies: true,
+    repeat: true,
+    description: "Viewer live longue duree",
+    actions: [wait(5000), scrollDown(2, 1000), wait(15000), wait(15000)],
+  },
+  {
+    id: "spotify",
+    name: "Spotify",
+    icon: "🎧",
+    color: "bg-emerald-500",
+    url: "https://open.spotify.com/",
+    num_workers: 60,
+    think_time_ms: 4000,
+    use_proxies: true,
+    repeat: true,
+    description: "Ecoute + navigation",
+    actions: [
+      wait(3000),
+      { type: "click", selector: "button[data-testid='play-button']", count: 1, delay_ms: 500 },
+      wait(20000),
+      scrollDown(3, 800),
+    ],
+  },
+  {
+    id: "reddit",
+    name: "Reddit",
+    icon: "🤖",
+    color: "bg-orange-500",
+    url: "https://www.reddit.com/",
+    num_workers: 70,
+    think_time_ms: 2000,
+    use_proxies: true,
+    repeat: true,
+    description: "Subreddits + threads",
+    actions: [
+      wait(2000),
+      scrollDown(5, 500),
+      { type: "click", selector: "a[data-testid='post-title']", count: 1, delay_ms: 600 },
+      wait(4000),
+      { type: "back" },
+    ],
+  },
+  {
+    id: "shop",
+    name: "E-commerce",
+    icon: "🛒",
+    color: "bg-amber-500",
+    url: "https://example.com/",
+    num_workers: 50,
+    think_time_ms: 1500,
+    use_proxies: true,
+    repeat: true,
+    description: "Fiches produit + panier",
+    actions: [
+      wait(1500),
+      scrollDown(4, 500),
+      { type: "click", selector: "a.product-link", count: 1, delay_ms: 600 },
+      wait(2000),
+      scrollDown(3, 600),
+      { type: "click", selector: "button.add-to-cart", count: 1, delay_ms: 500 },
+    ],
+  },
+  {
+    id: "google",
+    name: "Google SEO",
+    icon: "🔍",
+    color: "bg-yellow-400",
+    url: "https://www.google.com/",
+    num_workers: 60,
+    think_time_ms: 1800,
+    use_proxies: true,
+    repeat: true,
+    description: "Recherche + clic resultat",
+    actions: [
+      { type: "type_text", selector: "textarea[name='q']", value: "larp", delay_ms: 120 },
+      { type: "key_press", value: "Enter" },
+      wait(2500),
+      scrollDown(3, 600),
+      { type: "click", selector: "div#search a h3", count: 1, delay_ms: 600 },
+      wait(5000),
+    ],
+  },
+  {
+    id: "custom-video",
+    name: "Video longue",
+    icon: "🎬",
+    color: "bg-berry",
+    url: "https://example.com/video",
+    num_workers: 200,
+    think_time_ms: 8000,
+    use_proxies: true,
+    repeat: true,
+    description: "Watch-time maximal",
+    actions: [wait(5000), wait(15000), wait(15000), scrollDown(1, 500), wait(15000)],
+  },
+];
